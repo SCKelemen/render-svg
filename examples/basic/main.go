@@ -17,8 +17,8 @@ func main() {
 			AlignItems:     layout.AlignItemsCenter,
 			Width:          layout.Px(400),
 			Height:         layout.Px(200),
-			Padding:        layout.Uniform(20),
-			FlexGap:        10,
+			Padding:        layout.Uniform(layout.Px(20)),
+			FlexGap:        layout.Px(10),
 		},
 		Children: []*layout.Node{
 			{

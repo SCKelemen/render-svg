@@ -118,10 +118,19 @@ func escapeXML(s string) string {
 
 // GetTransformFromNode extracts SVG transform attribute from a layout node
 func GetTransformFromNode(node *layout.Node) string {
-	if node.Style.Transform.IsIdentity() {
+	t := node.Style.Transform
+
+	// Check for identity transform (no transformation needed)
+	if t.IsIdentity() {
 		return ""
 	}
-	return node.Style.Transform.ToSVGString()
+
+	// Check for zero transform (uninitialized) - treat as identity
+	if t.A == 0 && t.B == 0 && t.C == 0 && t.D == 0 && t.E == 0 && t.F == 0 {
+		return ""
+	}
+
+	return t.ToSVGString()
 }
 
 // GetRectFromNode extracts the computed rectangle from a layout node
