@@ -1,4 +1,4 @@
-# render-svg
+# svg
 
 A clean, efficient SVG rendering library that integrates with the [layout](https://github.com/SCKelemen/layout) engine to produce beautiful SVG graphics from layout trees.
 
@@ -9,12 +9,13 @@ A clean, efficient SVG rendering library that integrates with the [layout](https
 - **Styling System**: Colors, borders, backgrounds, shadows
 - **Text Rendering**: SVG text elements with proper positioning
 - **ClipPath Management**: Thread-safe unique ID generation for clipping
+- **Gradient Support**: Linear and radial gradients with multiple color spaces (OKLCH, OKLAB, sRGB, Display P3)
 - **Design Tokens**: Themeable styling system
 
 ## Installation
 
 ```bash
-go get github.com/SCKelemen/render-svg
+go get github.com/SCKelemen/svg
 ```
 
 ## Usage
@@ -27,7 +28,7 @@ package main
 import (
     "fmt"
     "github.com/SCKelemen/layout"
-    "github.com/SCKelemen/render-svg"
+    rendersvg "github.com/SCKelemen/svg"
 )
 
 func main() {
@@ -70,13 +71,26 @@ renderer := rendersvg.NewRenderer(rendersvg.Options{
 })
 
 // Render with custom styles
-svg := renderer.Render(root, func(node *layout.Node, depth int) rendersvg.Style {
-    return rendersvg.Style{
-        Fill: "#e0e0e0",
-        Stroke: "#333",
-        StrokeWidth: 1,
-    }
-})
+svg := renderer.Render(root)
+```
+
+### Gradients
+
+```go
+// Create a gradient with multiple color spaces
+gradient := rendersvg.LinearGradient{
+    ID: "myGradient",
+    X1: 0, Y1: 0,
+    X2: 100, Y2: 0,
+    Stops: []rendersvg.GradientStop{
+        {Offset: "0%", Color: "#3B82F6"},
+        {Offset: "100%", Color: "#8B5CF6"},
+    },
+    ColorSpace: color.GradientOKLCH, // Perceptually uniform gradients
+}
+
+// Apply gradient to elements
+svg := fmt.Sprintf(`<rect fill="url(#myGradient)" x="0" y="0" width="100" height="50"/>`)
 ```
 
 ## Design Philosophy
