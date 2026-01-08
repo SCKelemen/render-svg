@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/SCKelemen/layout"
+	"github.com/SCKelemen/units"
 )
 
 // StrokeLinecap defines how the end of a stroke is rendered
@@ -47,6 +48,34 @@ const (
 	DominantBaselineMathematical DominantBaseline = "mathematical"
 )
 
+// FontWeight defines font weight values
+type FontWeight string
+
+const (
+	FontWeightNormal  FontWeight = "normal"
+	FontWeightBold    FontWeight = "bold"
+	FontWeightBolder  FontWeight = "bolder"
+	FontWeightLighter FontWeight = "lighter"
+	FontWeight100     FontWeight = "100"
+	FontWeight200     FontWeight = "200"
+	FontWeight300     FontWeight = "300"
+	FontWeight400     FontWeight = "400"
+	FontWeight500     FontWeight = "500"
+	FontWeight600     FontWeight = "600"
+	FontWeight700     FontWeight = "700"
+	FontWeight800     FontWeight = "800"
+	FontWeight900     FontWeight = "900"
+)
+
+// FontStyle defines font style values
+type FontStyle string
+
+const (
+	FontStyleNormal  FontStyle = "normal"
+	FontStyleItalic  FontStyle = "italic"
+	FontStyleOblique FontStyle = "oblique"
+)
+
 // Style represents styling attributes for SVG elements
 type Style struct {
 	Fill             string
@@ -61,6 +90,10 @@ type Style struct {
 	ClipPath         string
 	TextAnchor       TextAnchor
 	DominantBaseline DominantBaseline
+	FontFamily       string
+	FontSize         units.Length // Type-safe CSS length with units
+	FontWeight       FontWeight
+	FontStyle        FontStyle
 }
 
 // Rect renders an SVG rectangle
@@ -99,6 +132,38 @@ func Text(content string, x, y float64, style Style) string {
 	attrs := formatStyle(style)
 	return fmt.Sprintf(`<text x="%.2f" y="%.2f"%s>%s</text>`,
 		x, y, attrs, escapeXML(content))
+}
+
+// TSpan renders an SVG tspan element (for use inside text elements)
+// TSpan allows styling different parts of text independently
+func TSpan(content string, style Style, dx, dy float64) string {
+	attrs := formatStyle(style)
+	posAttrs := ""
+	if dx != 0 {
+		posAttrs += fmt.Sprintf(` dx="%.2f"`, dx)
+	}
+	if dy != 0 {
+		posAttrs += fmt.Sprintf(` dy="%.2f"`, dy)
+	}
+	return fmt.Sprintf(`<tspan%s%s>%s</tspan>`, posAttrs, attrs, escapeXML(content))
+}
+
+// TextWithSpans renders an SVG text element with multiple styled spans
+func TextWithSpans(x, y float64, style Style, spans []string) string {
+	attrs := formatStyle(style)
+	return fmt.Sprintf(`<text x="%.2f" y="%.2f"%s>%s</text>`,
+		x, y, attrs, strings.Join(spans, ""))
+}
+
+// TextPath renders text along a path
+func TextPath(content string, pathID string, style Style, startOffset string) string {
+	attrs := formatStyle(style)
+	offsetAttr := ""
+	if startOffset != "" {
+		offsetAttr = fmt.Sprintf(` startOffset="%s"`, startOffset)
+	}
+	return fmt.Sprintf(`<textPath href="#%s"%s%s>%s</textPath>`,
+		pathID, offsetAttr, attrs, escapeXML(content))
 }
 
 // Path renders an SVG path
@@ -163,6 +228,19 @@ func formatStyle(s Style) string {
 	}
 	if s.DominantBaseline != "" {
 		attrs = append(attrs, fmt.Sprintf(`dominant-baseline="%s"`, string(s.DominantBaseline)))
+	}
+	if s.FontFamily != "" {
+		attrs = append(attrs, fmt.Sprintf(`font-family="%s"`, s.FontFamily))
+	}
+	if s.FontSize.Value != 0 {
+		// Format as "valueunit" (e.g., "16px", "1.5em", "2rem")
+		attrs = append(attrs, fmt.Sprintf(`font-size="%s"`, s.FontSize.String()))
+	}
+	if s.FontWeight != "" {
+		attrs = append(attrs, fmt.Sprintf(`font-weight="%s"`, string(s.FontWeight)))
+	}
+	if s.FontStyle != "" {
+		attrs = append(attrs, fmt.Sprintf(`font-style="%s"`, string(s.FontStyle)))
 	}
 
 	if len(attrs) == 0 {
