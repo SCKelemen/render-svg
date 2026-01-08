@@ -3,6 +3,8 @@ package rendersvg
 import (
 	"fmt"
 	"strings"
+
+	"github.com/SCKelemen/color"
 )
 
 // GradientStop represents a color stop in a gradient
@@ -201,4 +203,140 @@ func SimpleRadialGradient(id string, centerColor, edgeColor string) string {
 			{Offset: "100%", Color: edgeColor, Opacity: 1.0},
 		},
 	})
+}
+
+// InterpolatedLinearGradient creates a linear gradient with color interpolation in the specified color space
+// This creates smooth, natural-looking gradients by interpolating in the chosen color space
+// and converting to sRGB for SVG compatibility. Defaults to OKLCH for perceptually uniform gradients.
+//
+// colorSpace options:
+//   - color.GradientRGB: Interpolates in RGB space (fast but not perceptually uniform)
+//   - color.GradientHSL: Interpolates in HSL space
+//   - color.GradientLAB: Interpolates in CIE LAB space
+//   - color.GradientOKLAB: Interpolates in OKLAB space (perceptually uniform)
+//   - color.GradientLCH: Interpolates in CIE LCH space
+//   - color.GradientOKLCH: Interpolates in OKLCH space (perceptually uniform, recommended)
+func InterpolatedLinearGradient(id string, startColor, endColor string, angle float64, steps int, colorSpace color.GradientSpace) (string, error) {
+	if steps < 2 {
+		steps = 2
+	}
+
+	// Parse start and end colors
+	start, err := color.ParseColor(startColor)
+	if err != nil {
+		return "", fmt.Errorf("invalid start color: %w", err)
+	}
+	end, err := color.ParseColor(endColor)
+	if err != nil {
+		return "", fmt.Errorf("invalid end color: %w", err)
+	}
+
+	// Generate interpolated stops in the specified color space
+	colors := color.GradientInSpace(start, end, steps, colorSpace)
+	stops := make([]GradientStop, steps)
+	for i := 0; i < steps; i++ {
+		t := float64(i) / float64(steps-1)
+
+		// Convert to hex for SVG
+		hexColor := color.RGBToHex(colors[i])
+
+		stops[i] = GradientStop{
+			Offset:  fmt.Sprintf("%.1f%%", t*100),
+			Color:   hexColor,
+			Opacity: 1.0,
+		}
+	}
+
+	// Convert angle to x1,y1,x2,y2 coordinates
+	x1, y1, x2, y2 := angleToCoordinates(angle)
+
+	return LinearGradient(LinearGradientDef{
+		ID:    id,
+		X1:    x1,
+		Y1:    y1,
+		X2:    x2,
+		Y2:    y2,
+		Stops: stops,
+	}), nil
+}
+
+// OKLCHLinearGradient creates a perceptually uniform linear gradient using OKLCH interpolation
+// This is a convenience wrapper around InterpolatedLinearGradient with color.GradientOKLCH
+func OKLCHLinearGradient(id string, startColor, endColor string, angle float64, steps int) (string, error) {
+	return InterpolatedLinearGradient(id, startColor, endColor, angle, steps, color.GradientOKLCH)
+}
+
+// InterpolatedRadialGradient creates a radial gradient with color interpolation in the specified color space
+// This creates smooth, natural-looking gradients by interpolating in the chosen color space
+// and converting to sRGB for SVG compatibility.
+//
+// colorSpace options: same as InterpolatedLinearGradient
+func InterpolatedRadialGradient(id string, centerColor, edgeColor string, steps int, colorSpace color.GradientSpace) (string, error) {
+	if steps < 2 {
+		steps = 2
+	}
+
+	// Parse start and end colors
+	center, err := color.ParseColor(centerColor)
+	if err != nil {
+		return "", fmt.Errorf("invalid center color: %w", err)
+	}
+	edge, err := color.ParseColor(edgeColor)
+	if err != nil {
+		return "", fmt.Errorf("invalid edge color: %w", err)
+	}
+
+	// Generate interpolated stops in the specified color space
+	colors := color.GradientInSpace(center, edge, steps, colorSpace)
+	stops := make([]GradientStop, steps)
+	for i := 0; i < steps; i++ {
+		t := float64(i) / float64(steps-1)
+
+		// Convert to hex for SVG
+		hexColor := color.RGBToHex(colors[i])
+
+		stops[i] = GradientStop{
+			Offset:  fmt.Sprintf("%.1f%%", t*100),
+			Color:   hexColor,
+			Opacity: 1.0,
+		}
+	}
+
+	return RadialGradient(RadialGradientDef{
+		ID:    id,
+		CX:    "50%",
+		CY:    "50%",
+		R:     "50%",
+		Stops: stops,
+	}), nil
+}
+
+// OKLCHRadialGradient creates a perceptually uniform radial gradient using OKLCH interpolation
+// This is a convenience wrapper around InterpolatedRadialGradient with color.GradientOKLCH
+func OKLCHRadialGradient(id string, centerColor, edgeColor string, steps int) (string, error) {
+	return InterpolatedRadialGradient(id, centerColor, edgeColor, steps, color.GradientOKLCH)
+}
+
+// angleToCoordinates converts an angle in degrees to SVG gradient coordinates
+func angleToCoordinates(angle float64) (x1, y1, x2, y2 string) {
+	x1, y1, x2, y2 = "0%", "0%", "100%", "0%"
+	switch angle {
+	case 0:
+		x1, y1, x2, y2 = "0%", "0%", "100%", "0%"
+	case 90:
+		x1, y1, x2, y2 = "0%", "100%", "0%", "0%"
+	case 180:
+		x1, y1, x2, y2 = "100%", "0%", "0%", "0%"
+	case 270:
+		x1, y1, x2, y2 = "0%", "0%", "0%", "100%"
+	case 45:
+		x1, y1, x2, y2 = "0%", "100%", "100%", "0%"
+	case 135:
+		x1, y1, x2, y2 = "100%", "100%", "0%", "0%"
+	case 225:
+		x1, y1, x2, y2 = "100%", "0%", "0%", "100%"
+	case 315:
+		x1, y1, x2, y2 = "0%", "0%", "100%", "100%"
+	}
+	return
 }
