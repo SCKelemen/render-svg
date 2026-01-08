@@ -120,6 +120,49 @@ func Circle(cx, cy, r float64, style Style) string {
 		cx, cy, r, attrs)
 }
 
+// Ellipse renders an SVG ellipse
+func Ellipse(cx, cy, rx, ry float64, style Style) string {
+	attrs := formatStyle(style)
+	return fmt.Sprintf(`<ellipse cx="%.2f" cy="%.2f" rx="%.2f" ry="%.2f"%s/>`,
+		cx, cy, rx, ry, attrs)
+}
+
+// Polygon renders an SVG polygon (closed shape from points)
+func Polygon(points []Point, style Style) string {
+	if len(points) == 0 {
+		return ""
+	}
+
+	var pointsStr strings.Builder
+	for i, p := range points {
+		if i > 0 {
+			pointsStr.WriteString(" ")
+		}
+		fmt.Fprintf(&pointsStr, "%.2f,%.2f", p.X, p.Y)
+	}
+
+	attrs := formatStyle(style)
+	return fmt.Sprintf(`<polygon points="%s"%s/>`, pointsStr.String(), attrs)
+}
+
+// Polyline renders an SVG polyline (open shape from points)
+func Polyline(points []Point, style Style) string {
+	if len(points) == 0 {
+		return ""
+	}
+
+	var pointsStr strings.Builder
+	for i, p := range points {
+		if i > 0 {
+			pointsStr.WriteString(" ")
+		}
+		fmt.Fprintf(&pointsStr, "%.2f,%.2f", p.X, p.Y)
+	}
+
+	attrs := formatStyle(style)
+	return fmt.Sprintf(`<polyline points="%s"%s/>`, pointsStr.String(), attrs)
+}
+
 // Line renders an SVG line
 func Line(x1, y1, x2, y2 float64, style Style) string {
 	attrs := formatStyle(style)
