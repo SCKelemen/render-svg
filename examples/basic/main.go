@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/SCKelemen/layout"
-	rendersvg "github.com/SCKelemen/render-svg"
+	"github.com/SCKelemen/svg"
 )
 
 func main() {
@@ -46,27 +46,27 @@ func main() {
 	layout.Layout(root, constraints, ctx)
 
 	// Render to SVG with custom styling
-	opts := rendersvg.DefaultOptions()
+	opts := svg.DefaultOptions()
 	opts.Width = 400
 	opts.Height = 200
 	opts.BackgroundColor = "#f8f9fa"
-	opts.StyleFunc = func(node interface{}, depth int) rendersvg.Style {
+	opts.StyleFunc = func(node interface{}, depth int) svg.Style {
 		if depth == 0 {
 			// Root node - transparent
-			return rendersvg.Style{
+			return svg.Style{
 				Fill:   "none",
 				Stroke: "#dee2e6",
 			}
 		}
 		// Children - colored boxes
-		return rendersvg.Style{
+		return svg.Style{
 			Fill:        "#6366f1",
 			Stroke:      "#4f46e5",
 			StrokeWidth: 2,
 		}
 	}
 
-	svg := rendersvg.RenderToSVG(root, opts)
+	output := svg.RenderToSVG(root, opts)
 
-	fmt.Println(svg)
+	fmt.Println(output)
 }

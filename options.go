@@ -1,4 +1,4 @@
-package rendersvg
+package svg
 
 // Options configures SVG rendering behavior
 type Options struct {

@@ -13,4 +13,4 @@
 //		Height: 600,
 //	})
 //
-package rendersvg
+package svg

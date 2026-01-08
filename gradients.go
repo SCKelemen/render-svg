@@ -1,4 +1,4 @@
-package rendersvg
+package svg
 
 import (
 	"fmt"

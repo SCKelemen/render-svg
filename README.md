@@ -28,7 +28,7 @@ package main
 import (
     "fmt"
     "github.com/SCKelemen/layout"
-    rendersvg "github.com/SCKelemen/svg"
+    "github.com/SCKelemen/svg"
 )
 
 func main() {
@@ -51,12 +51,12 @@ func main() {
     layout.Layout(root, constraints, nil)
 
     // Render to SVG
-    svg := rendersvg.RenderToSVG(root, rendersvg.Options{
+    output := svg.RenderToSVG(root, svg.Options{
         Width: 400,
         Height: 200,
     })
 
-    fmt.Println(svg)
+    fmt.Println(output)
 }
 ```
 
@@ -64,25 +64,25 @@ func main() {
 
 ```go
 // Create a styled renderer
-renderer := rendersvg.NewRenderer(rendersvg.Options{
+renderer := svg.NewRenderer(svg.Options{
     Width: 800,
     Height: 600,
-    StyleSheet: rendersvg.DefaultStyles(),
+    StyleSheet: svg.DefaultStyles(),
 })
 
 // Render with custom styles
-svg := renderer.Render(root)
+output := renderer.Render(root)
 ```
 
 ### Gradients
 
 ```go
 // Create a gradient with multiple color spaces
-gradient := rendersvg.LinearGradient{
+gradient := svg.LinearGradient{
     ID: "myGradient",
     X1: 0, Y1: 0,
     X2: 100, Y2: 0,
-    Stops: []rendersvg.GradientStop{
+    Stops: []svg.GradientStop{
         {Offset: "0%", Color: "#3B82F6"},
         {Offset: "100%", Color: "#8B5CF6"},
     },
@@ -90,7 +90,7 @@ gradient := rendersvg.LinearGradient{
 }
 
 // Apply gradient to elements
-svg := fmt.Sprintf(`<rect fill="url(#myGradient)" x="0" y="0" width="100" height="50"/>`)
+svgElement := fmt.Sprintf(`<rect fill="url(#myGradient)" x="0" y="0" width="100" height="50"/>`)
 ```
 
 ## Design Philosophy
