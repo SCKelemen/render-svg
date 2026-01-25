@@ -81,6 +81,7 @@ type Style struct {
 	Fill             string
 	Stroke           string
 	StrokeWidth      float64
+	StrokeDashArray  string        // Dash pattern, e.g. "5,5" or "10,5,2,5"
 	StrokeLinecap    StrokeLinecap
 	StrokeLinejoin   StrokeLinejoin
 	Opacity          float64
@@ -244,6 +245,9 @@ func formatStyle(s Style) string {
 	}
 	if s.StrokeWidth > 0 {
 		attrs = append(attrs, fmt.Sprintf(`stroke-width="%.2f"`, s.StrokeWidth))
+	}
+	if s.StrokeDashArray != "" {
+		attrs = append(attrs, fmt.Sprintf(`stroke-dasharray="%s"`, s.StrokeDashArray))
 	}
 	if s.StrokeLinecap != "" {
 		attrs = append(attrs, fmt.Sprintf(`stroke-linecap="%s"`, string(s.StrokeLinecap)))
