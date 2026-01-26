@@ -1,0 +1,464 @@
+package svg
+
+import (
+	"bytes"
+	"encoding/xml"
+	"fmt"
+	"image"
+	"image/color"
+	"image/draw"
+	"image/jpeg"
+	"image/png"
+	"math"
+	"strconv"
+	"strings"
+
+	"golang.org/x/image/vector"
+)
+
+// ExportFormat represents an export format
+type ExportFormat string
+
+const (
+	// FormatSVG exports as SVG (passthrough)
+	FormatSVG ExportFormat = "svg"
+	// FormatPNG exports as PNG
+	FormatPNG ExportFormat = "png"
+	// FormatJPEG exports as JPEG
+	FormatJPEG ExportFormat = "jpeg"
+)
+
+// ExportOptions configures export settings
+type ExportOptions struct {
+	Format  ExportFormat
+	Width   int // For raster formats, 0 = use SVG dimensions
+	Height  int // For raster formats, 0 = use SVG dimensions
+	Quality int // For JPEG, 0-100 (default 90)
+	DPI     int // Dots per inch (default 96)
+}
+
+// DefaultExportOptions returns sensible defaults
+func DefaultExportOptions() ExportOptions {
+	return ExportOptions{
+		Format:  FormatSVG,
+		Quality: 90,
+		DPI:     96,
+	}
+}
+
+// Export converts SVG to the specified format
+func Export(svgData string, opts ExportOptions) ([]byte, error) {
+	// For SVG, just return the data
+	if opts.Format == FormatSVG {
+		return []byte(svgData), nil
+	}
+
+	// For raster formats, parse and rasterize
+	return rasterize(svgData, opts)
+}
+
+// svgElement represents a parsed SVG element
+type svgElement struct {
+	Tag        string
+	Attributes map[string]string
+	Children   []svgElement
+	Text       string
+}
+
+// parseSVG performs basic SVG parsing for our own generated SVG
+func parseSVG(svgData string) (*svgElement, error) {
+	decoder := xml.NewDecoder(strings.NewReader(svgData))
+
+	var root *svgElement
+	var stack []*svgElement
+
+	for {
+		token, err := decoder.Token()
+		if err != nil {
+			break
+		}
+
+		switch t := token.(type) {
+		case xml.StartElement:
+			elem := &svgElement{
+				Tag:        t.Name.Local,
+				Attributes: make(map[string]string),
+			}
+
+			for _, attr := range t.Attr {
+				elem.Attributes[attr.Name.Local] = attr.Value
+			}
+
+			if len(stack) > 0 {
+				parent := stack[len(stack)-1]
+				parent.Children = append(parent.Children, *elem)
+			} else {
+				root = elem
+			}
+
+			stack = append(stack, elem)
+
+		case xml.EndElement:
+			if len(stack) > 0 {
+				stack = stack[:len(stack)-1]
+			}
+
+		case xml.CharData:
+			if len(stack) > 0 {
+				text := strings.TrimSpace(string(t))
+				if text != "" {
+					stack[len(stack)-1].Text = text
+				}
+			}
+		}
+	}
+
+	if root == nil {
+		return nil, fmt.Errorf("no SVG root element found")
+	}
+
+	return root, nil
+}
+
+// rasterize converts SVG to a raster image
+func rasterize(svgData string, opts ExportOptions) ([]byte, error) {
+	// Parse SVG
+	root, err := parseSVG(svgData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse SVG: %w", err)
+	}
+
+	// Get dimensions
+	width, height, err := getSVGDimensions(root, opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get SVG dimensions: %w", err)
+	}
+
+	// Create image
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+
+	// Fill with white background
+	draw.Draw(img, img.Bounds(), &image.Uniform{color.White}, image.Point{}, draw.Src)
+
+	// Create rasterizer
+	rasterizer := vector.NewRasterizer(width, height)
+
+	// Render SVG elements
+	if err := renderElement(root, img, rasterizer, width, height); err != nil {
+		return nil, fmt.Errorf("failed to render SVG: %w", err)
+	}
+
+	// Encode to target format
+	var buf bytes.Buffer
+	switch opts.Format {
+	case FormatPNG:
+		encoder := png.Encoder{CompressionLevel: png.DefaultCompression}
+		if err := encoder.Encode(&buf, img); err != nil {
+			return nil, fmt.Errorf("failed to encode PNG: %w", err)
+		}
+	case FormatJPEG:
+		quality := opts.Quality
+		if quality == 0 {
+			quality = 90
+		}
+		if quality < 1 {
+			quality = 1
+		}
+		if quality > 100 {
+			quality = 100
+		}
+		jpegOpts := &jpeg.Options{Quality: quality}
+		if err := jpeg.Encode(&buf, img, jpegOpts); err != nil {
+			return nil, fmt.Errorf("failed to encode JPEG: %w", err)
+		}
+	default:
+		return nil, fmt.Errorf("unsupported format: %s", opts.Format)
+	}
+
+	return buf.Bytes(), nil
+}
+
+// getSVGDimensions extracts width and height from SVG
+func getSVGDimensions(root *svgElement, opts ExportOptions) (int, int, error) {
+	width := opts.Width
+	height := opts.Height
+
+	// Try to get from attributes
+	if width == 0 {
+		if w, ok := root.Attributes["width"]; ok {
+			width = parseLength(w)
+		}
+	}
+
+	if height == 0 {
+		if h, ok := root.Attributes["height"]; ok {
+			height = parseLength(h)
+		}
+	}
+
+	// Try viewBox if dimensions not set
+	if (width == 0 || height == 0) {
+		if viewBox, ok := root.Attributes["viewBox"]; ok {
+			parts := strings.Fields(viewBox)
+			if len(parts) == 4 {
+				if width == 0 {
+					width = parseLength(parts[2])
+				}
+				if height == 0 {
+					height = parseLength(parts[3])
+				}
+			}
+		}
+	}
+
+	// Default dimensions
+	if width == 0 {
+		width = 800
+	}
+	if height == 0 {
+		height = 600
+	}
+
+	return width, height, nil
+}
+
+// parseLength parses a length string (handles px, no unit)
+func parseLength(s string) int {
+	s = strings.TrimSpace(s)
+	s = strings.TrimSuffix(s, "px")
+	s = strings.TrimSuffix(s, "pt")
+
+	if val, err := strconv.ParseFloat(s, 64); err == nil {
+		return int(val)
+	}
+
+	return 0
+}
+
+// renderElement renders an SVG element to the image
+func renderElement(elem *svgElement, img *image.RGBA, rasterizer *vector.Rasterizer, width, height int) error {
+	switch elem.Tag {
+	case "svg":
+		// Render children
+		for _, child := range elem.Children {
+			if err := renderElement(&child, img, rasterizer, width, height); err != nil {
+				return err
+			}
+		}
+
+	case "rect":
+		return renderRect(elem, img, rasterizer)
+
+	case "circle":
+		return renderCircle(elem, img, rasterizer)
+
+	case "line":
+		return renderLine(elem, img, rasterizer)
+
+	case "g":
+		// Group - render children
+		for _, child := range elem.Children {
+			if err := renderElement(&child, img, rasterizer, width, height); err != nil {
+				return err
+			}
+		}
+
+	case "text":
+		// Text rendering is complex and requires font support
+		// For now, we'll skip text elements
+		// TODO: Implement text rendering using golang.org/x/image/font
+
+	case "path":
+		// Path rendering is complex
+		// TODO: Implement path rendering
+
+	default:
+		// Unknown or unsupported element, continue rendering children
+		for _, child := range elem.Children {
+			if err := renderElement(&child, img, rasterizer, width, height); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// renderRect renders a rectangle
+func renderRect(elem *svgElement, img *image.RGBA, rasterizer *vector.Rasterizer) error {
+	x := parseLength(elem.Attributes["x"])
+	y := parseLength(elem.Attributes["y"])
+	w := parseLength(elem.Attributes["width"])
+	h := parseLength(elem.Attributes["height"])
+
+	fillColor := parseColor(elem.Attributes["fill"])
+
+	// Draw rectangle
+	rect := image.Rect(x, y, x+w, y+h)
+	draw.Draw(img, rect, &image.Uniform{fillColor}, image.Point{}, draw.Over)
+
+	return nil
+}
+
+// renderCircle renders a circle
+func renderCircle(elem *svgElement, img *image.RGBA, rasterizer *vector.Rasterizer) error {
+	cx := parseLength(elem.Attributes["cx"])
+	cy := parseLength(elem.Attributes["cy"])
+	r := parseLength(elem.Attributes["r"])
+
+	fillColor := parseColor(elem.Attributes["fill"])
+
+	// Use vector rasterizer for smooth circles
+	rasterizer.Reset(img.Bounds().Dx(), img.Bounds().Dy())
+	rasterizer.DrawOp = draw.Over
+
+	// Draw circle using arc approximation
+	drawCircle(rasterizer, float32(cx), float32(cy), float32(r))
+
+	// Rasterize
+	src := image.NewUniform(fillColor)
+	rasterizer.Draw(img, img.Bounds(), src, image.Point{})
+
+	return nil
+}
+
+// renderLine renders a line
+func renderLine(elem *svgElement, img *image.RGBA, rasterizer *vector.Rasterizer) error {
+	x1 := parseLength(elem.Attributes["x1"])
+	y1 := parseLength(elem.Attributes["y1"])
+	x2 := parseLength(elem.Attributes["x2"])
+	y2 := parseLength(elem.Attributes["y2"])
+
+	strokeColor := parseColor(elem.Attributes["stroke"])
+
+	// Use vector rasterizer for antialiased lines
+	rasterizer.Reset(img.Bounds().Dx(), img.Bounds().Dy())
+	rasterizer.DrawOp = draw.Over
+
+	// Draw line
+	rasterizer.MoveTo(float32(x1), float32(y1))
+	rasterizer.LineTo(float32(x2), float32(y2))
+
+	// Rasterize with stroke
+	src := image.NewUniform(strokeColor)
+	rasterizer.Draw(img, img.Bounds(), src, image.Point{})
+
+	return nil
+}
+
+// parseColor parses a color string (hex or named)
+func parseColor(s string) color.Color {
+	s = strings.TrimSpace(s)
+
+	if s == "" || s == "none" {
+		return color.Transparent
+	}
+
+	// Handle hex colors
+	if strings.HasPrefix(s, "#") {
+		s = strings.TrimPrefix(s, "#")
+
+		var r, g, b uint8
+
+		if len(s) == 6 {
+			// #RRGGBB
+			if val, err := strconv.ParseUint(s[0:2], 16, 8); err == nil {
+				r = uint8(val)
+			}
+			if val, err := strconv.ParseUint(s[2:4], 16, 8); err == nil {
+				g = uint8(val)
+			}
+			if val, err := strconv.ParseUint(s[4:6], 16, 8); err == nil {
+				b = uint8(val)
+			}
+		} else if len(s) == 3 {
+			// #RGB (shorthand)
+			if val, err := strconv.ParseUint(s[0:1], 16, 8); err == nil {
+				r = uint8(val * 17) // 0xF -> 0xFF
+			}
+			if val, err := strconv.ParseUint(s[1:2], 16, 8); err == nil {
+				g = uint8(val * 17)
+			}
+			if val, err := strconv.ParseUint(s[2:3], 16, 8); err == nil {
+				b = uint8(val * 17)
+			}
+		}
+
+		return color.RGBA{R: r, G: g, B: b, A: 255}
+	}
+
+	// Handle named colors
+	switch s {
+	case "white":
+		return color.White
+	case "black":
+		return color.Black
+	case "red":
+		return color.RGBA{R: 255, A: 255}
+	case "green":
+		return color.RGBA{G: 255, A: 255}
+	case "blue":
+		return color.RGBA{B: 255, A: 255}
+	default:
+		return color.Black
+	}
+}
+
+// drawCircle draws a circle using the vector rasterizer
+func drawCircle(r *vector.Rasterizer, cx, cy, radius float32) {
+	const segments = 32
+
+	r.MoveTo(cx+radius, cy)
+
+	for i := 1; i <= segments; i++ {
+		angle := float64(i) * 2.0 * math.Pi / float64(segments)
+		x := cx + radius*float32(math.Cos(angle))
+		y := cy + radius*float32(math.Sin(angle))
+		r.LineTo(x, y)
+	}
+
+	r.ClosePath()
+}
+
+// GetMimeType returns the MIME type for a format
+func GetMimeType(format ExportFormat) string {
+	switch format {
+	case FormatSVG:
+		return "image/svg+xml"
+	case FormatPNG:
+		return "image/png"
+	case FormatJPEG:
+		return "image/jpeg"
+	default:
+		return "application/octet-stream"
+	}
+}
+
+// GetFileExtension returns the file extension for a format
+func GetFileExtension(format ExportFormat) string {
+	switch format {
+	case FormatSVG:
+		return ".svg"
+	case FormatPNG:
+		return ".png"
+	case FormatJPEG:
+		return ".jpg"
+	default:
+		return ".bin"
+	}
+}
+
+// ParseFormat parses a format string
+func ParseFormat(s string) (ExportFormat, error) {
+	s = strings.ToLower(strings.TrimSpace(s))
+	switch s {
+	case "svg":
+		return FormatSVG, nil
+	case "png":
+		return FormatPNG, nil
+	case "jpeg", "jpg":
+		return FormatJPEG, nil
+	default:
+		return "", fmt.Errorf("unknown format: %s", s)
+	}
+}

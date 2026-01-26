@@ -4,3 +4,5 @@ github.com/SCKelemen/layout v1.1.0 h1:mxc755/HZkaBV5pT4MjzURfYkG2fDPyqqdiAOh1L8X
 github.com/SCKelemen/layout v1.1.0/go.mod h1:wC8jGHA3+Uj1hW/nHWwLonO52ZVHd9WWeqEB3xA4SQ0=
 github.com/SCKelemen/units v1.0.2 h1:pkU72sxAIIGzcxvxWWhRem1L5DzL4wnmtYn9KDZvQP0=
 github.com/SCKelemen/units v1.0.2/go.mod h1:4AtPZnvBZHQ66SxsUk8VjxztXGMMvbA5toat/65B7S4=
+golang.org/x/image v0.35.0 h1:LKjiHdgMtO8z7Fh18nGY6KDcoEtVfsgLDPeLyguqb7I=
+golang.org/x/image v0.35.0/go.mod h1:MwPLTVgvxSASsxdLzKrl8BRFuyqMyGhLwmC+TO1Sybk=
